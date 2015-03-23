@@ -38,7 +38,7 @@ end
 
 function trim_trailing_slash(path)
 	if string.sub(path, -1) == "/" then
-		path = string.sub(path, 1, -2)
+		path = string.sub(path, 1, -1)
 	end
 	return path
 end
