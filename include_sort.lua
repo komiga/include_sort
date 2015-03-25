@@ -38,10 +38,13 @@ end
 
 function trim_trailing_slash(path)
 	if string.sub(path, -1) == "/" then
-		path = string.sub(path, 1, -1)
+		path = string.sub(path, 1, -2)
 	end
 	return path
 end
+
+--[[assert(trim_trailing_slash("a") == "a")
+assert(trim_trailing_slash("a/") == "a")--]]
 
 function split_string(s, sep, plain)
 	assert(sep ~= nil)
