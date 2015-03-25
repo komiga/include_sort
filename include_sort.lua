@@ -237,7 +237,6 @@ end
 function parse(order_tree, stream, threshold)
 	assert(threshold > 0)
 	local data = {
-		path = path,
 		source = {},
 		include_blocks = {},
 		terminated = false,
