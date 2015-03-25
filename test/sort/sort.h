@@ -9,6 +9,7 @@
 #include <x/a.e2>
 #include "always_root"
 
+#include <y.always_tail>
 #include <y/2>
 #include <y/1.e1>
 #include <y/2.e1>
