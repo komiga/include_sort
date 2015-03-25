@@ -393,8 +393,8 @@ function process_dir(order_tree, dir, exclusions, extension_filter)
 		local full_path = dir .. '/' .. path
 		local _, extension = split_path(path)
 		if
-			extension_filter == nil or extension_filter[extension] ~= nil or
-			exclusions == nil or exclusions[path] ~= nil
+			(extension_filter == nil or extension_filter[extension] ~= nil) and
+			(exclusions == nil or exclusions[path] == nil)
 		then
 			local modified = process_file(order_tree, full_path)
 			print(pad(modified and "reordered" or "OK", 10, true) .. ": " .. path)
