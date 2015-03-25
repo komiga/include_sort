@@ -179,6 +179,7 @@ function make_order_tree(extensions, root, path_value_override)
 		order_tree.extension_value[extension] = i
 	end
 
+	local stride = 10000
 	local value = 100000
 	local function build_paths(path, node)
 		path = (path and (path .. "/") or "") .. node.name
@@ -195,7 +196,7 @@ function make_order_tree(extensions, root, path_value_override)
 
 	for _, root_node in pairs(order_tree.root) do
 		build_paths(nil, root_node)
-		value = value + 100000
+		value = value + stride
 	end
 
 	return order_tree
