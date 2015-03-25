@@ -208,7 +208,7 @@ function node_value(order_tree, path)
 	return node and node.value or nil
 end
 
-function calc_path_value(order_tree, path)
+function calc_path_value(order_tree, path, extension)
 	local computed_value = order_tree.path_value_override[path]
 	if not computed_value then
 		computed_value = node_value(order_tree, path)
@@ -224,6 +224,11 @@ function calc_path_value(order_tree, path)
 				end
 			end
 		end
+	end
+	if config.override_path_value then
+		computed_value = config.override_path_value(
+			order_tree, path, extension, computed_value
+		)
 	end
 	-- Relative to maximum
 	if computed_value ~= nil and computed_value < 0 then
@@ -269,7 +274,7 @@ function parse(order_tree, stream, threshold)
 				start_position = line_position
 			end
 			path, extension = split_path(path)
-			path_value = calc_path_value(order_tree, path)
+			path_value = calc_path_value(order_tree, path, extension)
 			table.insert(includes, {
 				position = line_position,
 				line = line,
