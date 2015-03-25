@@ -397,7 +397,10 @@ function process_dir(order_tree, dir, exclusions, extension_filter)
 			(exclusions == nil or exclusions[path] == nil)
 		then
 			local modified = process_file(order_tree, full_path)
-			print(pad(modified and "reordered" or "OK", 10, true) .. ": " .. path)
+			local status = modified and "reordered" or "OK"
+			if modified or config.print_ok then
+				print(pad(status, 10, true) .. ": " .. path)
+			end
 		end
 	end
 end
@@ -413,7 +416,9 @@ function main(arguments)
 		return 0
 	end
 
-	config = {}
+	config = {
+		print_ok = true,
+	}
 	dofile(arguments[1])
 
 	if config.exec ~= nil then
