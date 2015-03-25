@@ -1,5 +1,6 @@
 
 require "lfs"
+require "bit32"
 
 DEBUG_MODE = false
 
@@ -223,6 +224,10 @@ function calc_path_value(order_tree, path)
 				end
 			end
 		end
+	end
+	-- Relative to maximum
+	if computed_value ~= nil and computed_value < 0 then
+		computed_value = bit32.bnot(0) + computed_value
 	end
 	return computed_value
 end
