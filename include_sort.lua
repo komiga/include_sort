@@ -212,60 +212,55 @@ function make_order_tree(tree, extension_order, path_value, value_filter)
 	return order_tree
 end
 
-function node_path_value(node, value, path, max)
-	return value or
-		node.root.path_value[path] or
-		(max and node.max_value or node.value)
-end
-
-function node_extension_value(node, value, extension)
-	return value or
-		node.root.extension_value[extension]
-end
-
 function calc_path_value(config, path, extension)
-	local path_value = config.order_tree.path_value[path]
-	local extension_value = config.order_tree.extension_value[extension]
-	local node, value_filter
-	if path_value == nil or extension_value == nil then
-		node = config.order_tree.by_path[path]
-		if node then
-			path_value = node_path_value(node, path_value, path)
-			extension_value = node_extension_value(node, extension_value, extension)
-			value_filter = value_filter or node.root.value_filter
+	local node = nil
+	local value_filter = nil
+	local value = {
+		path_value = config.order_tree.path_value[path],
+		extension_value = config.order_tree.extension_value[extension],
+	}
+	local function update(from_node, max)
+		if not from_node then
+			return
+		end
+		node = node or from_node
+		if value.path == nil then
+			value.path = node.root.path_value[path] or (max and node.max_value or node.value)
+		end
+		if value.extension == nil then
+			value.extension = node.root.extension_value[extension]
+		end
+		if value_filter == nil then
+			value_filter = node.root.value_filter
 		end
 	end
-	if path_value == nil or extension_value == nil then
+	update(config.order_tree.by_path[path])
+	if not node then
 		for i = string.len(path), 1, -1 do
 			if string.sub(path, i, i) == '/' then
-				node = config.order_tree.by_path[string.sub(path, 1, i - 1)]
+				update(config.order_tree.by_path[string.sub(path, 1, i - 1)], true)
 				if node then
-					path_value = node_path_value(node, path_value, path, true)
-					extension_value = node_extension_value(node, extension_value, extension)
-					value_filter = value_filter or node.root.value_filter
 					break
 				end
 			end
 		end
 	end
-	local value_filter = value_filter or config.order_tree.value_filter
+	value_filter = value_filter or config.order_tree.value_filter
 	if value_filter then
-		path_value, extension_value = value_filter(
-			config, path, extension, path_value, extension_value
-		)
+		value_filter(config, path, extension, value)
 	end
-	if path_value == nil then
-		extension_value = nil
+	if value.path == nil then
+		value.extension = nil
 	else
 		-- Relative to maximum
-		if path_value < 0 then
-			path_value = 0xFFFFFFFF + path_value
+		if value.path < 0 then
+			value.path = 0xFFFFFFFF + value.path
 		end
-		if extension_value == nil then
-			extension_value = extension == "" and 0 or 999
+		if value.extension == nil then
+			value.extension = extension == "" and 0 or 999
 		end
 	end
-	return path_value, extension_value
+	return value.path, value.extension
 end
 
 function parse(config, stream, threshold)
