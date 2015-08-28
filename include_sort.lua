@@ -448,7 +448,7 @@ function new_config()
 		exclusions = {},
 		extension_filter = nil,
 		order_tree = nil,
-		paths = nil,
+		paths = {},
 		exec = nil,
 	}
 end
