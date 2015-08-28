@@ -76,6 +76,58 @@ function split_path(path)
 	return string.match(path, "^(%.?%.?[^%.]*)%.?([^%.\\/]*)$")
 end
 
+local BYTE_SLASH = string.byte('/', 1)
+local BYTE_DOT = string.byte('.', 1)
+
+function dirname(s)
+	s = trim_trailing_slash(s)
+	for i = #s, 1, -1 do
+		if string.byte(s, i) == BYTE_SLASH then
+			return string.sub(s, 1, i - 1)
+		end
+	end
+	return s
+end
+
+--[[assert(dirname("") == "")
+assert(dirname("a") == "a")
+assert(dirname("a/b") == "a")
+assert(dirname("a/b/c/") == "a/b")--]]
+
+function basename(s)
+	s = trim_trailing_slash(s)
+	local d = 0
+	for i = #s, 1, -1 do
+		if string.byte(s, i) == BYTE_DOT then
+			d = i
+			break
+		end
+	end
+	for i = #s, 1, -1 do
+		if string.byte(s, i) == BYTE_SLASH and i ~= #s then
+			if i < d then
+				return string.sub(s, i + 1, d - 1)
+			else
+				return string.sub(s, i + 1, #s)
+			end
+		end
+	end
+	return s
+end
+
+--[[assert(basename("") == "")
+assert(basename("a") == "a")
+assert(basename("a/b") == "b")
+assert(basename("a/b/c/") == "c")--]]
+
+function scoped_call(path, f, ...)
+	local pd = lfs.currentdir()
+	lfs.chdir(path)
+	local r = f(...)
+	lfs.chdir(pd)
+	return r
+end
+
 function insertion_sort(less_func, t, first, last)
 	assert(less_func ~= nil)
 	assert(t ~= nil)
