@@ -1,6 +1,5 @@
 
 require "lfs"
-require "bit32"
 
 DEBUG_MODE = false
 
@@ -168,84 +167,108 @@ function include_tostring(include)
 	)
 end
 
-function make_order_tree(extensions, root, path_value_override)
+function make_order_tree(tree, extension_order, path_value, value_filter)
+	path_value = path_value or {}
+	extension_order = extension_order or {}
 	local order_tree = {
-		root = root,
+		root = tree,
 		by_path = {},
+		path_value = path_value,
 		extension_value = {},
-		path_value_override = path_value_override
+		value_filter = value_filter,
 	}
-
-	for i, extension in ipairs(extensions) do
+	local last_extension_value = 0
+	for i, extension in ipairs(extension_order) do
 		order_tree.extension_value[extension] = i
+		last_extension_value = i
 	end
 
 	local stride = 10000
 	local value = 100000
-	local function build_paths(path, node)
+	local function build_paths(path, root, node)
 		path = (path and (path .. "/") or "") .. node.name
 		-- print("cp: " .. pad(tostring(value), 6) .. " => " .. path)
+		node.root = root
 		node.value = value
 		node.path = path
 		order_tree.by_path[path] = node
 		value = value + 1
 		for _, child in pairs(node.children) do
-			build_paths(path, child)
+			build_paths(path, root, child)
 		end
 		node.max_value = value
 	end
 
-	for _, root_node in pairs(order_tree.root) do
-		build_paths(nil, root_node)
+	for _, root in pairs(order_tree.root) do
+		assert(root._is_root)
+		root.extension_value = {}
+		for i, extension in ipairs(root.extension_order) do
+			root.extension_value[extension] = last_extension_value + i
+		end
+		build_paths(nil, root, root)
 		value = value + stride
 	end
 
 	return order_tree
 end
 
-function node_value(order_tree, path)
-	local node = order_tree.by_path[path]
-	return node and node.value or nil
+function node_path_value(node, value, path, max)
+	return value or
+		node.root.path_value[path] or
+		(max and node.max_value or node.value)
 end
 
-function calc_path_value(order_tree, path, extension)
-	local computed_value = order_tree.path_value_override[path]
-	if not computed_value then
-		computed_value = node_value(order_tree, path)
+function node_extension_value(node, value, extension)
+	return value or
+		node.root.extension_value[extension]
+end
+
+function calc_path_value(config, path, extension)
+	local path_value = config.order_tree.path_value[path]
+	local extension_value = config.order_tree.extension_value[extension]
+	local node, value_filter
+	if path_value == nil or extension_value == nil then
+		node = config.order_tree.by_path[path]
+		if node then
+			path_value = node_path_value(node, path_value, path)
+			extension_value = node_extension_value(node, extension_value, extension)
+			value_filter = value_filter or node.root.value_filter
+		end
 	end
-	if not computed_value then
-		local node
+	if path_value == nil or extension_value == nil then
 		for i = string.len(path), 1, -1 do
 			if string.sub(path, i, i) == '/' then
-				node = order_tree.by_path[string.sub(path, 1, i - 1)]
-				if node ~= nil then
-					computed_value = node.max_value
+				node = config.order_tree.by_path[string.sub(path, 1, i - 1)]
+				if node then
+					path_value = node_path_value(node, path_value, path, true)
+					extension_value = node_extension_value(node, extension_value, extension)
+					value_filter = value_filter or node.root.value_filter
 					break
 				end
 			end
 		end
 	end
-	if config.override_path_value then
-		computed_value = config.override_path_value(
-			order_tree, path, extension, computed_value
+	local value_filter = value_filter or config.order_tree.value_filter
+	if value_filter then
+		path_value, extension_value = value_filter(
+			config, path, extension, path_value, extension_value
 		)
 	end
-	-- Relative to maximum
-	if computed_value ~= nil and computed_value < 0 then
-		computed_value = bit32.bnot(0) + computed_value
+	if path_value == nil then
+		extension_value = nil
+	else
+		-- Relative to maximum
+		if path_value < 0 then
+			path_value = 0xFFFFFFFF + path_value
+		end
+		if extension_value == nil then
+			extension_value = extension == "" and 0 or 999
+		end
 	end
-	return computed_value
+	return path_value, extension_value
 end
 
-function extension_value(order_tree, extension)
-	if extension == nil then
-		return 0
-	end
-	local value = order_tree.extension_value[extension]
-	return value or 999
-end
-
-function parse(order_tree, stream, threshold)
+function parse(config, stream, threshold)
 	assert(threshold > 0)
 	local data = {
 		source = {},
@@ -257,7 +280,7 @@ function parse(order_tree, stream, threshold)
 	local line_position = 1
 	local start_position = nil
 	local path, extension
-	local path_value
+	local path_value, extension_value
 	local includes = {}
 	while true do
 		line = stream:read("*l")
@@ -274,14 +297,14 @@ function parse(order_tree, stream, threshold)
 				start_position = line_position
 			end
 			path, extension = split_path(path)
-			path_value = calc_path_value(order_tree, path, extension)
+			path_value, extension_value = calc_path_value(config, path, extension)
 			table.insert(includes, {
 				position = line_position,
 				line = line,
 				path = path,
 				extension = extension,
 				path_value = path_value,
-				extension_value = extension_value(order_tree, extension),
+				extension_value = extension_value,
 			})
 		else
 			if start_position ~= nil then
@@ -338,9 +361,9 @@ function include_less(order_tree, x, y)
 	end
 end
 
-function sort(order_tree, data)
+function sort(config, data)
 	local function less_func(x, y)
-		return include_less(order_tree, x, y)
+		return include_less(config.order_tree, x, y)
 	end
 
 	local modified = false
@@ -362,14 +385,14 @@ function sort(order_tree, data)
 	return modified
 end
 
-function process_file(order_tree, path)
+function process_file(config, path)
 	local stream, err = io.open(path, "r")
 	if stream == nil then
 		error("failed to read '" .. path .. "': " .. err)
 	end
-	local data = parse(order_tree, stream, 150)
+	local data = parse(config, stream, 150)
 	stream:close()
-	if sort(order_tree, data) then
+	if sort(config, data) then
 		stream = io.open(path, "w+")
 		for _, s in pairs(data.source) do
 			if type(s) == "table" then
@@ -386,17 +409,17 @@ function process_file(order_tree, path)
 	return false
 end
 
-function process_dir(order_tree, dir, exclusions, extension_filter)
+function process_dir(config, dir)
 	dir = trim_trailing_slash(dir)
 	local full_path
 	for path, _ in iterate_dir(dir, "file") do
 		local full_path = dir .. '/' .. path
 		local _, extension = split_path(path)
 		if
-			(extension_filter == nil or extension_filter[extension] ~= nil) and
-			(exclusions == nil or exclusions[path] == nil)
+			(config.extension_filter == nil or config.extension_filter[extension] ~= nil) and
+			(config.exclusions == nil or config.exclusions[path] == nil)
 		then
-			local modified = process_file(order_tree, full_path)
+			local modified = process_file(config, full_path)
 			local status = modified and "reordered" or "OK"
 			if modified or config.print_ok then
 				print(pad(status, 10, true) .. ": " .. path)
@@ -406,8 +429,37 @@ function process_dir(order_tree, dir, exclusions, extension_filter)
 end
 
 function N(name, children)
-	children = children or {}
-	return {name = name, children = children}
+	return {
+		name = name,
+		children = children or {}
+	}
+end
+
+function R(name, children, extension_order, path_value, value_filter)
+	return {
+		_is_root = true,
+		name = name,
+		children = children or {},
+		extension_order = extension_order or {},
+		path_value = path_value or {},
+		value_filter = value_filter
+	}
+end
+
+function new_config()
+	return {
+		print_ok = true,
+		append_arg_paths = false,
+		exclusions = {},
+		extension_filter = nil,
+		order_tree = nil,
+		paths = nil,
+		exec = nil,
+	}
+end
+
+function validate_config(config)
+	assert(config.order_tree, "config is missing order tree")
 end
 
 function main(arguments)
@@ -416,30 +468,26 @@ function main(arguments)
 		return 0
 	end
 
-	config = {
-		print_ok = true,
-	}
-	dofile(arguments[1])
-
+	local config = dofile(arguments[1])
+	validate_config(config)
 	if config.exec ~= nil then
 		return config.exec(arguments)
 	else
 		local paths = config.paths
 		if #arguments > 1 then
-			paths = {}
+			paths = config.append_arg_paths and paths or {}
 			for i = 2, #arguments do
 				table.insert(paths, arguments[i])
 			end
 		end
-		for _, path in pairs(paths) do
-			print("processing directory: '" .. path .. "'")
-			process_dir(
-				config.order_tree,
-				path,
-				config.exclusions,
-				config.extension_filter
-			)
-			print()
+		if #paths == 0 then
+			print("include_sort: no paths")
+		else
+			for _, path in pairs(paths) do
+				print("processing directory: '" .. path .. "'")
+				process_dir(config, path)
+				print()
+			end
 		end
 	end
 	return 0
