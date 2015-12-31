@@ -1,5 +1,5 @@
 #!/bin/bash
 
-IS_ROOT="$(cd "$(dirname $(readlink "${BASH_SOURCE[0]}"))" && pwd)"
+IS_ROOT="$(cd "$(dirname $(readlink -f "${BASH_SOURCE[0]}"))" && pwd)"
 
 lua5.2 "$IS_ROOT/include_sort.lua" $@
