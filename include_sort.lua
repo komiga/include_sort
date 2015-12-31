@@ -73,8 +73,23 @@ function split_string(s, sep, plain)
 end
 
 function split_path(path)
-	return string.match(path, "^(%.?%.?[^%.]*)%.?([^%.\\/]*)$")
+	local name, extension = string.match(path, "^(%.?%.?.*)%.([^%.\\/]*)$")
+	return (name or path), extension
 end
+
+--[[local function test_split_path(path, name, extension)
+	local t_name, t_extension = split_path(path)
+	assert(t_name == name)
+	assert(t_extension == extension)
+end
+
+test_split_path("", "", nil)
+test_split_path("a", "a", nil)
+test_split_path("a/b", "a/b", nil)
+test_split_path("a/b.c", "a/b", "c")
+test_split_path("a.b/c", "a.b/c", nil)
+test_split_path("a.b/c.d", "a.b/c", "d")
+test_split_path("luajit-2.0/lua.h", "luajit-2.0/lua", "h")--]]
 
 local BYTE_SLASH = string.byte('/', 1)
 local BYTE_DOT = string.byte('.', 1)
