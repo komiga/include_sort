@@ -256,12 +256,18 @@ function make_order_tree(tree, extension_order, path_value, value_filter)
 		path = (path and (path .. "/") or "") .. node.name
 		-- print("cp: " .. pad(tostring(value), 6) .. " => " .. path)
 		node.root = root
-		node.value = value
 		node.path = path
 		order_tree.by_path[path] = node
-		value = value + 1
+		if not node.value_post then
+			node.value = value
+			value = value + 1
+		end
 		for _, child in pairs(node.children) do
 			build_paths(path, root, child)
+		end
+		if node.value_post then
+			node.value = value
+			value = value + 1
 		end
 		node.max_value = value
 	end
@@ -488,6 +494,11 @@ function process_dir(config, dir)
 			end
 		end
 	end
+end
+
+function node_value_post(node)
+	node.value_post = true
+	return node
 end
 
 function N(name, children)
